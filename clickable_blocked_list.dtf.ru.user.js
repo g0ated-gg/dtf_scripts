@@ -89,16 +89,71 @@
     }
 
     const a = document.createElement("a");
-    a.href = profileUrl;
+    const url = new URL(profileUrl, window.location.href);
+    a.href = url.pathname + url.search + url.hash;
     a.rel = "noopener noreferrer";
     a.style.color = "inherit";
     a.style.textDecoration = "none";
     a.style.cursor = "pointer";
+    a.addEventListener("click", (e) => {
+      const navUrl = new URL(a.href, window.location.href);
+      if (navUrl.origin !== window.location.origin) return;
+      const path = navUrl.pathname + navUrl.search + navUrl.hash;
+      if (tryRouterPush(path)) {
+        e.preventDefault();
+        return;
+      }
+      if (softNavigate(path)) {
+        e.preventDefault();
+        return;
+      }
+    });
 
     while (nameEl.firstChild) a.appendChild(nameEl.firstChild);
     nameEl.appendChild(a);
 
     nameEl.dataset.dtfLinked = "1";
+  }
+
+  /**
+   * Tries to access Vue Router and navigate with it.
+   * @param {string} path
+   * @returns {boolean}
+   */
+  function tryRouterPush(path) {
+    const app = document.querySelector("#app")?.__vue_app__;
+    const routerFromGlobals = app?.config?.globalProperties?.$router;
+    if (routerFromGlobals?.push) {
+      routerFromGlobals.push(path).catch(() => {});
+      return true;
+    }
+
+    const provides = app?._context?.provides;
+    if (!provides) return false;
+    for (const key of Reflect.ownKeys(provides)) {
+      const candidate = provides[key];
+      if (candidate?.push && candidate?.currentRoute) {
+        candidate.push(path).catch(() => {});
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Attempts SPA navigation via a hidden data-router-link anchor.
+   * @param {string} path
+   * @returns {boolean}
+   */
+  function softNavigate(path) {
+    const a = document.createElement("a");
+    a.href = path;
+    a.setAttribute("data-router-link", "");
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
   }
 
   /**
